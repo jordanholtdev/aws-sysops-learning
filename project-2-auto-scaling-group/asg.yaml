@@ -165,3 +165,30 @@ Resources:
                       - autoscaling:EC2_INSTANCE_TERMINATE
                       - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
                   TopicARN: !Ref SNSNotificationTopic
+    WebServerGroupAlphaScalingPolicy:
+        Type: AWS::AutoScaling::ScalingPolicy
+        Properties:
+            AutoScalingGroupName: !Ref WebServerGroupAlpha
+            PolicyType: StepScaling
+            AdjustmentType: ChangeInCapacity
+            MetricAggregationType: Average
+            EstimatedInstanceWarmup: '60'
+            StepAdjustments:
+                - MetricIntervalLowerBound: '0'
+                  ScalingAdjustment: '1'
+    CPUAlarmHigh:
+        Type: AWS::CloudWatch::Alarm
+        Properties:
+            AlarmDescription: 'Scale out if CPU > 90% for 2 minutes'
+            EvaluationPeriods: 2
+            Statistic: Average
+            Threshold: 90
+            Namespace: AWS/EC2
+            MetricName: CPUUtilization
+            Dimensions:
+                - Name: AutoScalingGroupName
+                  Value: !Ref WebServerGroupAlpha
+            Period: '60'
+            AlarmActions:
+                - !Ref WebServerGroupAlphaScalingPolicy
+            ComparisonOperator: GreaterThanThreshold
