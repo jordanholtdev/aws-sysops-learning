@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: EC2 instance for project 1
+Parameters:
+    Stage:
+        Type: String
+        Default: Development
+        AllowedValues:
+            - Development
+            - Production
+            - Staging
+    InstanceName:
+        Type: String
+        Default: ec2-instance-alpha
+    SubnetId:
+        Type: String
+        Description: Subnet ID for the EC2 instance
+Resources:
+    EC2InstanceAlpha:
+        Type: AWS::EC2::Instance
+        Properties:
+            ImageId: ami-0759f51a90924c166
+            InstanceType: t2.micro
+            Tags:
+                - Key: Name
+                  Value: !Ref InstanceName
+                - Key: Stage
+                  Value: !Ref Stage
+            SubnetId: !Ref SubnetId
