@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: EC2 instance for project 1
+Description: EC2 instance with EBS volume attached. Project 1 SysOps Learning
 Parameters:
     Stage:
         Type: String
@@ -14,11 +14,21 @@ Parameters:
     SubnetId:
         Type: String
         Description: Subnet ID for the EC2 instance
+    SecurityGroupId:
+        Type: String
+        Description: Security group ID for the EC2 instance
+    AmiId:
+        Type: String
+        Description: AMI ID for the EC2 instance
+    AvailabilityZone:
+        Type: String
+        Description: Availability zone
+
 Resources:
     EC2InstanceAlpha:
         Type: AWS::EC2::Instance
         Properties:
-            ImageId: ami-0759f51a90924c166
+            ImageId: !Ref AmiId
             InstanceType: t2.micro
             Tags:
                 - Key: Name
@@ -26,3 +36,30 @@ Resources:
                 - Key: Stage
                   Value: !Ref Stage
             SubnetId: !Ref SubnetId
+            SecurityGroupIds:
+                - !Ref SecurityGroupId
+            BlockDeviceMappings:
+                - DeviceName: /dev/sda1
+                  Ebs:
+                      VolumeSize: 10
+                      VolumeType: gp2
+                      DeleteOnTermination: true
+
+    EBSVolumeAlpha:
+        Type: AWS::EC2::Volume
+        Properties:
+            Size: 10
+            AvailabilityZone: !GetAtt EC2InstanceAlpha.AvailabilityZone
+            Tags:
+                - Key: Name
+                  Value: !Ref InstanceName
+                - Key: Stage
+                  Value: !Ref Stage
+            VolumeType: gp2
+
+    VolumeAttachmentAlpha:
+        Type: AWS::EC2::VolumeAttachment
+        Properties:
+            InstanceId: !Ref EC2InstanceAlpha
+            VolumeId: !Ref EBSVolumeAlpha
+            Device: /dev/sdh
