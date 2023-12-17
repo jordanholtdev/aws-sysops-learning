@@ -1,0 +1,2 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Auto Scaling Group with Launch Configuration, Elastic Load Balancer and EBS volume attached. Project 2 SysOps Learning
