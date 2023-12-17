@@ -1,2 +1,167 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Auto Scaling Group with Launch Configuration, Elastic Load Balancer and EBS volume attached. Project 2 SysOps Learning
+Description: Auto Scaling Group with Launch Configuration, Lauch Template & Elastic Load Balancer. Project 2 SysOps Learning
+
+Parameters:
+    Stage:
+        Description: Stage of the environment
+        Type: String
+        Default: Development
+        AllowedValues:
+            - Development
+            - Production
+            - Staging
+    VpcId:
+        Description: ID of the VPC
+        Type: String
+    SubnetIds:
+        Description: Subnet IDs for the EC2 instance
+        Type: List<AWS::EC2::Subnet::Id>
+    AmiId:
+        Description: AMI ID for the EC2 instance
+        Type: String
+    KeyName:
+        Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+        Type: 'AWS::EC2::KeyPair::KeyName'
+    InstanceType:
+        Description: EC2 instance type
+        Type: String
+        Default: t2.micro
+        AllowedValues:
+            - t2.micro
+            - t2.small
+            - t2.medium
+            - t3.micro
+            - t3.small
+            - t3.medium
+    OperatorEmail:
+        Description: Email address of the operator to notify when scaling activities take place
+        Type: String
+    SSHLocation:
+        Description: The IP address range that can be used to SSH to the EC2 instances
+        Type: String
+        MinLength: '9'
+        MaxLength: '18'
+        Default: 0.0.0.0/0
+        ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
+
+Resources:
+    ELBSecurityGroupAlpha:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: ELB Security Group
+            VpcId: !Ref VpcId
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+    EC2SecurityGroupAlpha:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: EC2 Security Group
+            VpcId: !Ref VpcId
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  SourceSecurityGroupId:
+                      Fn::GetAtt:
+                          - ELBSecurityGroupAlpha
+                          - GroupId
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIp: !Ref SSHLocation
+    EC2TargetGroupAlpha:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            HealthCheckIntervalSeconds: 30
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 15
+            HealthyThresholdCount: 5
+            Matcher:
+                HttpCode: '200'
+            Port: 80
+            Protocol: HTTP
+            TargetGroupAttributes:
+                - Key: deregistration_delay.timeout_seconds
+                  Value: '30'
+            UnhealthyThresholdCount: 2
+            VpcId: !Ref VpcId
+    ALBListener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref EC2TargetGroupAlpha
+            LoadBalancerArn: !Ref ALBAlpha
+            Port: 80
+            Protocol: HTTP
+    ALBAlpha:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Scheme: internet-facing
+            SecurityGroups:
+                - !GetAtt ELBSecurityGroupAlpha.GroupId
+            Subnets: !Ref SubnetIds
+            Tags:
+                - Key: Name
+                  Value: ALB-Alpha
+    LaunchTemplateAlpha:
+        Type: AWS::EC2::LaunchTemplate
+        Properties:
+            LaunchTemplateName: LaunchTemplateAlpha
+            VersionDescription: Version 1
+            LaunchTemplateData:
+                ImageId: !Ref AmiId
+                InstanceType: !Ref InstanceType
+                KeyName: !Ref KeyName
+                SecurityGroupIds:
+                    - !Ref EC2SecurityGroupAlpha
+                UserData:
+                    Fn::Base64: !Sub |
+                        #!/bin/bash
+                        yum update -y
+                        yum install httpd -y
+                        systemctl start httpd
+                        systemctl enable httpd
+                        echo "<html><body><h1>Hello World</h1></body></html>" > /var/www/html/index.html
+                TagSpecifications:
+                    - ResourceType: instance
+                      Tags:
+                          - Key: Name
+                            Value: EC2-Alpha
+                          - Key: Stage
+                            Value: !Ref Stage
+    SNSNotificationTopic:
+        Type: AWS::SNS::Topic
+        Properties:
+            Subscription:
+                - Endpoint: !Ref OperatorEmail
+                  Protocol: email
+    WebServerGroupAlpha:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            AutoScalingGroupName: WebServerGroupAlpha
+            LaunchTemplate:
+                LaunchTemplateId: !Ref LaunchTemplateAlpha
+                Version: !GetAtt LaunchTemplateAlpha.LatestVersionNumber
+            MinSize: 1
+            MaxSize: 3
+            TargetGroupARNs:
+                - !Ref EC2TargetGroupAlpha
+            VPCZoneIdentifier: !Ref SubnetIds
+            Tags:
+                - Key: Name
+                  Value: WebServerGroupAlpha
+                  PropagateAtLaunch: true
+                - Key: Stage
+                  Value: !Ref Stage
+                  PropagateAtLaunch: true
+            NotificationConfigurations:
+                - NotificationTypes:
+                      - autoscaling:EC2_INSTANCE_LAUNCH
+                      - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+                      - autoscaling:EC2_INSTANCE_TERMINATE
+                      - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
+                  TopicARN: !Ref SNSNotificationTopic
