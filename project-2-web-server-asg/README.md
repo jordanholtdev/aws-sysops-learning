@@ -1,8 +1,8 @@
-# Auto Scaling Group Template
-
-Set up an Auto Scaling Group, using a step scaling policy with a CloudWatch Alarm that automatically scales out when CPU utilization is greater than 90%. Instances are load balanced using an ALB.
+# Web server auto scaling group
 
 ## Overview
+
+This is an auto scaling group for web servers with Apache installed. This ASG uses a step scaling policy with a CloudWatch Alarm that automatically scales out when CPU utilization is greater than 90%. Instances are load balanced using an ALB.
 
 ## CloudFormation Deployment
 
