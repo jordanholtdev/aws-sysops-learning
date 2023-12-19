@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Basic HA environment
+
+Parameters:
+    EnvironmentName:
+        Description: An environment name that will be prefixed to resource names
+        Type: String
+
+    VpcCIDR:
+        Description: Please enter the IP range (CIDR notation) for this VPC
+        Type: String
+
+    PublicSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+        Type: String
+
+    PublicSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+        Type: String
+
+    PrivateSubnet1CIDR:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+        Type: String
+
+    PrivateSubnet2CIDR:
+        Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+        Type: String
+
+    AmiId:
+        Description: Please enter the AMI ID for the web server instances
+        Type: String
+
+    InstanceType:
+        Description: Please enter the instance type for the web server instances
+        Type: String
+
+    OperatorEmail:
+        Description: Please enter the email address of the operator
+        Type: String
+
+Resources:
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Ref VpcCIDR
+            EnableDnsSupport: true
+            EnableDnsHostnames: true
+            Tags:
+                - Key: Name
+                  Value: !Ref EnvironmentName
+
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-igw
+
+    VPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    PublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Ref PublicSubnet1CIDR
+            AvailabilityZone: !Select [0, !GetAZs '']
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-public-1
+
+    PublicSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Ref PublicSubnet2CIDR
+            AvailabilityZone: !Select [1, !GetAZs '']
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-public-2
+
+    PrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Ref PrivateSubnet1CIDR
+            AvailabilityZone: !Select [0, !GetAZs '']
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-private-1
+
+    PrivateSubnet2:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref VPC
+            CidrBlock: !Ref PrivateSubnet2CIDR
+            AvailabilityZone: !Select [1, !GetAZs '']
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-private-2
+
+    PublicRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+
+    PrivateRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref VPC
+
+    PublicRoute:
+        Type: AWS::EC2::Route
+        DependsOn: VPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref PublicRouteTable
+            DestinationCidrBlock: '0.0.0.0/0'
+            GatewayId: !Ref InternetGateway
+
+    PublicSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PublicSubnet1
+            RouteTableId: !Ref PublicRouteTable
+
+    PublicSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PublicSubnet2
+            RouteTableId: !Ref PublicRouteTable
+
+    PrivateSubnet1RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PrivateSubnet1
+            RouteTableId: !Ref PrivateRouteTable
+
+    PrivateSubnet2RouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref PrivateSubnet2
+            RouteTableId: !Ref PrivateRouteTable
+
+    ELBSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: ELB Security Group
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+
+    WebServerSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: Enable HTTP access via port 80
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: '80'
+                  ToPort: '80'
+                  SourceSecurityGroupId:
+                      Fn::GetAtt:
+                          - ELBSecurityGroup
+                          - GroupId
+
+    WebServerTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            HealthCheckIntervalSeconds: 30
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 15
+            HealthyThresholdCount: 5
+            Matcher:
+                HttpCode: '200'
+            Port: 80
+            Protocol: HTTP
+            TargetGroupAttributes:
+                - Key: deregistration_delay.timeout_seconds
+                  Value: '30'
+            UnhealthyThresholdCount: 2
+            VpcId: !Ref VPC
+
+    ALBListener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref WebServerTargetGroup
+            LoadBalancerArn: !Ref ALB
+            Port: 80
+            Protocol: HTTP
+
+    ALB:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+        Properties:
+            Scheme: internet-facing
+            SecurityGroups:
+                - !GetAtt ELBSecurityGroup.GroupId
+            Subnets:
+                - !Ref PublicSubnet1
+                - !Ref PublicSubnet2
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-alb
+
+    LaunchTemplateId:
+        Type: AWS::EC2::LaunchTemplate
+        Properties:
+            LaunchTemplateName: !Sub ${EnvironmentName}-launch-template
+            VersionDescription: Initial version
+            LaunchTemplateData:
+                ImageId: !Ref AmiId
+                InstanceType: !Ref InstanceType
+                SecurityGroupIds:
+                    - !Ref WebServerSecurityGroup
+                TagSpecifications:
+                    - ResourceType: instance
+                      Tags:
+                          - Key: Name
+                            Value: !Sub ${EnvironmentName}-web-server
+                UserData:
+                    Fn::Base64: !Sub |
+                        #!/bin/bash
+                        yum update -y
+                        yum install -y httpd
+                        systemctl start httpd
+                        systemctl enable httpd
+                        echo "<html><body><h1>Hello World</h1></body></html>" > /var/www/html/index.html
+
+    SNSNotificationTopic:
+        Type: AWS::SNS::Topic
+        Properties:
+            Subscription:
+                - Endpoint: !Ref OperatorEmail
+                  Protocol: email
+
+    WebServerGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            AutoScalingGroupName: !Sub ${EnvironmentName}-web-server-group
+            LaunchTemplate:
+                LaunchTemplateId: !Ref LaunchTemplateId
+                Version: !GetAtt LaunchTemplateId.LatestVersionNumber
+            MinSize: 1
+            MaxSize: 3
+            DesiredCapacity: 2
+            TargetGroupARNs:
+                - !Ref WebServerTargetGroup
+            VPCZoneIdentifier:
+                - !Ref PrivateSubnet1
+                - !Ref PrivateSubnet2
+            NotificationConfigurations:
+                - NotificationTypes:
+                      - autoscaling:EC2_INSTANCE_LAUNCH
+                      - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+                      - autoscaling:EC2_INSTANCE_TERMINATE
+                      - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
+                  TopicARN: !Ref SNSNotificationTopic
+            Tags:
+                - Key: Name
+                  Value: !Sub ${EnvironmentName}-web-server-group
+                  PropagateAtLaunch: true
+                - Key: Stage
+                  Value: !Ref EnvironmentName
+                  PropagateAtLaunch: true
+
+    WebServerGroupAlphaScalingPolicy:
+        Type: AWS::AutoScaling::ScalingPolicy
+        Properties:
+            AutoScalingGroupName: !Ref WebServerGroup
+            PolicyType: StepScaling
+            AdjustmentType: ChangeInCapacity
+            MetricAggregationType: Average
+            EstimatedInstanceWarmup: '60'
+            StepAdjustments:
+                - MetricIntervalLowerBound: '0'
+                  ScalingAdjustment: '1'
+
+    CPUAlarmHigh:
+        Type: AWS::CloudWatch::Alarm
+        Properties:
+            AlarmDescription: 'Scale out if CPU > 90% for 2 minutes'
+            EvaluationPeriods: 2
+            Statistic: Average
+            Threshold: 90
+            Namespace: AWS/EC2
+            MetricName: CPUUtilization
+            Dimensions:
+                - Name: AutoScalingGroupName
+                  Value: !Ref WebServerGroup
+            ComparisonOperator: GreaterThanThreshold
+            Period: 120
+            AlarmActions:
+                - !Ref WebServerGroupAlphaScalingPolicy
