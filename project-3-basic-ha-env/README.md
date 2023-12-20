@@ -20,6 +20,6 @@
 ```bash
  aws cloudformation create-stack \
  --stack-name proj2ASG \
- --template-body file://main-template.yaml \
+ --template-body file://basic-env.yaml \
  --parameters file://parameters.json
 ```
