@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+    S3 Bucket with versioning, replication and encryption enabled
+
+Parameters:
+    BucketName:
+        Type: String
+        Description: S3 Bucket Name
+        Default: my-bucket
+    Environment:
+        Type: String
+        Description: Environment name
+        AllowedValues:
+            - dev
+            - prod
+            - test
+        Default: dev
+
+Resources:
+    S3ReplicationRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: !Sub ${Environment}-${BucketName}-replication-role
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service:
+                              - s3.amazonaws.com
+                      Action:
+                          - sts:AssumeRole
+            Policies:
+                - PolicyName: !Sub ${Environment}-${BucketName}-replication-policy
+                  PolicyDocument:
+                      Version: 2012-10-17
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - s3:ListBucket
+                                - S3:GetReplicationConfiguration
+                                - s3:GetObjectVersionForReplication
+                                - s3:GetObjectVersionAcl
+                                - s3:GetObjectVersionTagging
+                                - s3:GetObjectRetention
+                                - s3:GetObjectLegalHold
+                            Resource:
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}/*
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}-replica
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}-replica/*
+                          - Effect: Allow
+                            Action:
+                                - s3:ReplicateObject
+                                - s3:ReplicateDelete
+                                - s3:ReplicateTags
+                                - s3:ObjectOwnerOverrideToBucketOwner
+                            Resource:
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}-replica/*
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}/*
+                          - Effect: Allow
+                            Action:
+                                - s3:ListBucket
+                                - s3:GetReplicationConfiguration
+                            Resource:
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}-replica
+                                - !Sub arn:aws:s3:::${Environment}-${BucketName}
+
+    S3ReplicaBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketName: !Sub ${Environment}-${BucketName}-replica
+            BucketEncryption:
+                ServerSideEncryptionConfiguration:
+                    - ServerSideEncryptionByDefault:
+                          SSEAlgorithm: AES256
+            VersioningConfiguration:
+                Status: Enabled
+
+            Tags:
+                - Key: Name
+                  Value: !Sub ${BucketName}-replica
+                - Key: Environment
+                  Value: !Ref Environment
+
+    S3Bucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketName: !Sub ${Environment}-${BucketName}
+            VersioningConfiguration:
+                Status: Enabled
+            BucketEncryption:
+                ServerSideEncryptionConfiguration:
+                    - ServerSideEncryptionByDefault:
+                          SSEAlgorithm: AES256
+            ReplicationConfiguration:
+                Role: !GetAtt S3ReplicationRole.Arn
+                Rules:
+                    - Id: !Sub ${Environment}-${BucketName}-replication-rule
+                      Status: Enabled
+                      Prefix: ''
+                      Destination:
+                          Bucket: !GetAtt S3ReplicaBucket.Arn
+                          StorageClass: STANDARD
+            Tags:
+                - Key: Name
+                  Value: !Ref BucketName
+                - Key: Environment
+                  Value: !Ref Environment
+
+Outputs:
+    S3Bucket:
+        Description: S3 Bucket Name
+        Value: !Ref S3Bucket
+    S3ReplicaBucket:
+        Description: S3 Replica Bucket Name
+        Value: !Ref S3ReplicaBucket
