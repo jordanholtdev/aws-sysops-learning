@@ -40,11 +40,11 @@ Resources:
                 RestrictPublicBuckets: true
             LifecycleConfiguration:
                 Rules:
-                    - Id: MoveToIA
+                    - Id: MoveToIT
                       Status: Enabled
                       Transitions:
-                          - StorageClass: STANDARD_IA
-                            TransitionInDays: 30
+                          - StorageClass: INTELLIGENT_TIERING
+                            TransitionInDays: 0
             IntelligentTieringConfigurations:
                 - Id: IntelligentTieringConfig
                   Status: Enabled

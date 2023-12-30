@@ -1,12 +1,12 @@
-# Configure S3 Buckets
+# S3 Intelligent-Tiering basic example
 
 ## Overview
 
-Basic S3 Bucket
+S3 Intelligent-Tiering basic example
 
 -   Public Access Blocked
 -   Encryption using SSE-S3 with Bucket Key enabled
--   Lifecycle configuration rule to transition to Standard IA after 30 days
+-   Lifecycle configuration rule to transition to Intelligent-Tiering after 0 days.
 -   Intelligent-tiering archive configuration to move objects tagged with `opt-in-archive: true` from IA to Deep Archive Access after 180 days
 
 ## CloudFormation Deployment
@@ -17,6 +17,6 @@ Basic S3 Bucket
 ```bash
  aws cloudformation create-stack \
  --stack-name proj6S3 \
- --template-body file://ia-s3.yaml \
+ --template-body file://it-s3.yaml \
  --parameters file://parameters.json \
 ```
