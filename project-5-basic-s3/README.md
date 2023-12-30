@@ -21,6 +21,14 @@ Basic S3 Bucket
 
 ## Helpful CLI commands for testing
 
+Calulate the SHA-256 checksum of an object before upload to verify integrity
+
+```bash
+sha256sum somefile.json | awk '{print $1}' | xxd -r -p | base64
+```
+
+Upload an object to a bucket using the `PutObject` api
+
 ```bash
 aws s3api put-object \
 --bucket BUCKET-NAME \
@@ -28,6 +36,8 @@ aws s3api put-object \
 --body somefile.json \
 --storage-class STANDARD \
 --metadata visibility=private,version=1,category=reports,source=sensorA,document-type=json \
---tagging "Environment=test&Owner=sysops&Project=sysops"
+--tagging "Environment=test&Owner=sysops&Project=sysops" \
+--checksum-algorithm SHA256 \
+--checksum-sha256 "filesha256checksum"
 
 ```
