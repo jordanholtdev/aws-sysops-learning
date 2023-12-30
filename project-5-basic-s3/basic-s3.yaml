@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+    Basic S3 Bucket with encryption enabled
+
+Parameters:
+    BucketName:
+        Type: String
+        Description: S3 Bucket Name
+        Default: my-bucket
+    Environment:
+        Type: String
+        Description: Environment name
+        AllowedValues:
+            - dev
+            - prod
+            - test
+        Default: dev
+    Project:
+        Type: String
+        Description: Project name
+        Default: sysops-learning
+    Owner:
+        Type: String
+        Description: Owner name
+        Default: sysops
+
+Resources:
+    S3Bucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketName: !Ref BucketName
+            BucketEncryption:
+                ServerSideEncryptionConfiguration:
+                    - ServerSideEncryptionByDefault:
+                          SSEAlgorithm: 'AES256'
+            PublicAccessBlockConfiguration:
+                BlockPublicAcls: true
+                BlockPublicPolicy: true
+                IgnorePublicAcls: true
+                RestrictPublicBuckets: true
+
+            Tags:
+                - Key: Environment
+                  Value: !Ref Environment
+                - Key: Name
+                  Value: !Ref BucketName
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Owner
+                  Value: !Ref Owner
+Outputs:
+    BucketName:
+        Description: S3 Bucket Name
+        Value: !Ref BucketName
+    BucketArn:
+        Description: S3 Bucket ARN
+        Value: !GetAtt S3Bucket.Arn
+    BucketDomainName:
+        Description: S3 Bucket Domain Name
+        Value: !GetAtt S3Bucket.DomainName
