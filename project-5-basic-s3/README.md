@@ -18,3 +18,16 @@ Basic S3 Bucket
  --template-body file://basic-s3.yaml \
  --parameters file://parameters.json \
 ```
+
+## Helpful CLI commands for testing
+
+```bash
+aws s3api put-object \
+--bucket BUCKET-NAME \
+--key dir-1/somefile.json \
+--body somefile.json \
+--storage-class STANDARD \
+--metadata visibility=private,version=1,category=reports,source=sensorA,document-type=json \
+--tagging "Environment=test&Owner=sysops&Project=sysops"
+
+```
