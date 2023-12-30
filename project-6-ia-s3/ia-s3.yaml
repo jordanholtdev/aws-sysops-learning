@@ -52,7 +52,7 @@ Resources:
                       - AccessTier: DEEP_ARCHIVE_ACCESS
                         Days: 180
                   TagFilters:
-                      - Key: opt-in-archive
+                      - Key: Opt-in-archive
                         Value: true
 
             Tags:

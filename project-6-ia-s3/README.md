@@ -7,7 +7,7 @@ Basic S3 Bucket
 -   Public Access Blocked
 -   Encryption using SSE-S3 with Bucket Key enabled
 -   Lifecycle configuration rule to transition to Standard IA after 30 days
--   IA archive configuration to move objects tagged with `opt-in-archive: true` from IA to Deep Archive Access after 180 days
+-   Intelligent-tiering archive configuration to move objects tagged with `opt-in-archive: true` from IA to Deep Archive Access after 180 days
 
 ## CloudFormation Deployment
 
