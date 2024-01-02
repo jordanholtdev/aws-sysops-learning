@@ -1,0 +1,247 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+    Create a basic VPC for development with public and private subnets in one AZ only.
+
+Parameters:
+    Environment:
+        Type: String
+        Description: Environment name
+        AllowedValues:
+            - dev
+            - prod
+            - test
+        Default: dev
+    Project:
+        Type: String
+        Description: Project name
+        Default: sysops-lab-8
+    Owner:
+        Type: String
+        Description: Owner name
+        Default: sysops
+    VpcCIDR:
+        Type: String
+        Description: CIDR for the VPC
+    PublicSubnetCIDR:
+        Type: String
+        Description: CIDR for the public subnet 1
+    PrivateSubnetCIDR:
+        Type: String
+        Description: CIDR for the private subnet 1
+    AvailabilityZone:
+        Type: AWS::EC2::AvailabilityZone::Name
+        Description: Availability Zone
+
+Resources:
+    DevVPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: !Ref VpcCIDR
+            EnableDnsSupport: true
+            EnableDnsHostnames: true
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-vpc
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevInternetGateway:
+        Type: AWS::EC2::InternetGateway
+        Properties:
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-igw
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevVPCGatewayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref DevVPC
+            InternetGatewayId: !Ref DevInternetGateway
+
+    DevPublicSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref DevVPC
+            CidrBlock: !Ref PublicSubnetCIDR
+            AvailabilityZone: !Ref AvailabilityZone
+            MapPublicIpOnLaunch: true
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-public-subnet-1
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevPrivateSubnet1:
+        Type: AWS::EC2::Subnet
+        Properties:
+            VpcId: !Ref DevVPC
+            CidrBlock: !Ref PrivateSubnetCIDR
+            AvailabilityZone: !Ref AvailabilityZone
+            MapPublicIpOnLaunch: false
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-private-subnet-1
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevPublicRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref DevVPC
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-public-route-table
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevPublicRoute:
+        Type: AWS::EC2::Route
+        DependsOn: DevVPCGatewayAttachment
+        Properties:
+            RouteTableId: !Ref DevPublicRouteTable
+            DestinationCidrBlock: '0.0.0.0/0'
+            GatewayId: !Ref DevInternetGateway
+
+    DevPublicRouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref DevPublicSubnet1
+            RouteTableId: !Ref DevPublicRouteTable
+
+    DevPrivateRouteTable:
+        Type: AWS::EC2::RouteTable
+        Properties:
+            VpcId: !Ref DevVPC
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-private-route-table
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevPrivateRouteAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            SubnetId: !Ref DevPrivateSubnet1
+            RouteTableId: !Ref DevPrivateRouteTable
+
+    PublicNatGateway:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt DevPublicEIP.AllocationId
+            SubnetId: !Ref DevPublicSubnet1
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-nat-gateway
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevPublicEIP:
+        Type: AWS::EC2::EIP
+        Properties:
+            Domain: vpc
+            Tags:
+                - Key: Name
+                  Value: !Sub ${Project}-${Environment}-eip
+                - Key: Owner
+                  Value: !Ref Owner
+                - Key: Project
+                  Value: !Ref Project
+                - Key: Environment
+                  Value: !Ref Environment
+
+    DevRouteNATGateway:
+        DependsOn: PublicNatGateway
+        Type: AWS::EC2::Route
+        Properties:
+            RouteTableId: !Ref DevPrivateRouteTable
+            DestinationCidrBlock: '0.0.0.0/0'
+            NatGatewayId: !Ref PublicNatGateway
+
+    DevPublicSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub ${Project}-${Environment}-public-sg
+            GroupDescription: Public security group. Allow http to client.
+            VpcId: !Ref DevVPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: '0.0.0.0/0'
+            SecurityGroupEgress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: '0.0.0.0/0'
+
+    DevPrivateSecurityGroup:
+        DependsOn: DevPublicSecurityGroup
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Sub ${Project}-${Environment}-private-sg
+            GroupDescription: Private security group. Allow MySQL from public subnet.
+            VpcId: !Ref DevVPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 3306
+                  ToPort: 3306
+                  SourceSecurityGroupId: !Ref DevPublicSecurityGroup
+
+Outputs:
+    VPC:
+        Description: A reference to the created VPC
+        Value: !Ref DevVPC
+    PublicSubnet1:
+        Description: A reference to the created public subnet 1
+        Value: !Ref DevPublicSubnet1
+    PrivateSubnet1:
+        Description: A reference to the created private subnet 1
+        Value: !Ref DevPrivateSubnet1
+    PublicRouteTable:
+        Description: A reference to the created public route table
+        Value: !Ref DevPublicRouteTable
+    PrivateRouteTable:
+        Description: A reference to the created private route table
+        Value: !Ref DevPrivateRouteTable
+    PublicRoute:
+        Description: A reference to the created public route
+        Value: !Ref DevPublicRoute
+    PrivateRoute:
+        Description: A reference to the created private route
+        Value: !Ref DevPrivateRouteAssociation
+    PublicNatGateway:
+        Description: A reference to the created public NAT gateway
+        Value: !Ref PublicNatGateway
+    PublicEIP:
+        Description: A reference to the created public EIP
+        Value: !Ref DevPublicEIP
