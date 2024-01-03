@@ -179,8 +179,7 @@ Resources:
                 - Key: Environment
                   Value: !Ref Environment
 
-    DevRouteNATGateway:
-        DependsOn: PublicNatGateway
+    DevPrivateRoute:
         Type: AWS::EC2::Route
         Properties:
             RouteTableId: !Ref DevPrivateRouteTable

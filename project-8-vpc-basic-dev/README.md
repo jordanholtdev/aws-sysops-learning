@@ -28,7 +28,7 @@ TODO:
 
 ```bash
  aws cloudformation create-stack \
- --stack-name proj8S3 \
+ --stack-name proj8VPC \
  --template-body file://vpc-basic-dev.yaml \
  --parameters file://parameters.json
 ```
