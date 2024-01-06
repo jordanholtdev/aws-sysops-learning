@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+    This template creates an EC2 instance with a bootstrap script that installs a file.
+Parameters:
+    environment:
+        Type: String
+        Description: Environment name
+        Default: dev
+    instanceType:
+        Type: String
+        Description: EC2 instance type
+        Default: t2.micro
+    amiId:
+        Type: AWS::EC2::Image::Id
+        Description: AMI ID
+    subnetId:
+        Type: AWS::EC2::Subnet::Id
+        Description: Subnet ID
+    securityGroupId:
+        Type: AWS::EC2::SecurityGroup::Id
+        Description: Security Group ID
+    instanceName:
+        Type: String
+        Description: Name of the EC2 instance
+        Default: EC2 Instance
+    projectName:
+        Type: String
+        Description: Name of the project
+
+Resources:
+    MyInstance:
+        Type: AWS::EC2::Instance
+        CreationPolicy:
+            ResourceSignal:
+                Timeout: PT5M
+        Metadata:
+            'AWS::CloudFormation::Init':
+                config:
+                    files:
+                        /tmp/test.txt:
+                            content: Hello world!
+                            mode: '000755'
+                            owner: root
+                            group: root
+        Properties:
+            ImageId: !Ref amiId
+            InstanceType: !Ref instanceType
+            SecurityGroupIds:
+                - !Ref securityGroupId
+            SubnetId: !Ref subnetId
+            Tags:
+                - Key: project
+                  Value: !Ref projectName
+                - Key: name
+                  Value: !Ref instanceName
+                - Key: environment
+                  Value: !Ref environment
+
+            UserData:
+                Fn::Base64: !Sub |
+                    #!/bin/bash -xe
+                    # Install the files and packages from the metadata
+                    yum update -y
+                    yum install -y aws-cfn-bootstrap
+                    # signal the status from cfn-init
+                    /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource MyInstance --region ${AWS::Region}
+                    /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource MyInstance --region ${AWS::Region}
+
+Outputs:
+    InstanceId:
+        Description: InstanceId of the newly created EC2 instance
+        Value: !Ref MyInstance
+        Export:
+            Name: !Sub '${AWS::StackName}-InstanceId'
